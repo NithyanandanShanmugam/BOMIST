@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard</title>
+<style>
+body { font-family: Arial; margin: 20px; background:#eef2f7; }
+.container { max-width:1200px; margin:auto; }
+.cards { display:flex; gap:15px; }
+.card { flex:1; padding:20px; background:white; border-radius:10px; text-align:center; }
+table { width:100%; margin-top:20px; border-collapse: collapse; }
+th, td { padding:10px; border:1px solid #ccc; text-align:center; }
+button { padding:5px 10px; margin:2px; cursor:pointer; }
+.approve { background:green; color:white; }
+.issue { background:blue; color:white; }
+</style>
+</head>
+<body>
+<div class="container">
+<h2>Material Request Dashboard</h2>
+
+<div class="cards">
+<div class="card"><h3>Total</h3><p id="total">0</p></div>
+<div class="card"><h3>Pending</h3><p id="pending">0</p></div>
+<div class="card"><h3>Approved</h3><p id="approved">0</p></div>
+<div class="card"><h3>Issued</h3><p id="issued">0</p></div>
+</div>
+
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>User</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
+</div>
+
+<script>
+// 🔗 UPDATE THIS AFTER DEPLOYMENT
+// Example: https://your-backend.onrender.com
+const API = "https://your-backend-url.com";
+const token = localStorage.getItem("token");
+
+async function loadDashboard() {
+  let res = await fetch(API + "/dashboard", {
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = await res.json();
+
+  document.getElementById("total").innerText = data.total;
+  document.getElementById("pending").innerText = data.pending;
+  document.getElementById("approved").innerText = data.approved;
+  document.getElementById("issued").innerText = data.issued;
+}
+
+async function loadRequests() {
+  let res = await fetch(API + "/requests", {
+    headers: { Authorization: "Bearer " + token }
+  });
+  let data = await res.json();
+
+  let tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+
+  data.forEach(r => {
+    let actions = "";
+
+    if (r.status === "PENDING")
+      actions += `<button class='approve' onclick="approve('${r.id}')">Approve</button>`;
+
+    if (r.status === "APPROVED")
+      actions += `<button class='issue' onclick="issue('${r.id}')">Issue</button>`;
+
+    tbody.innerHTML += `
+      <tr>
+        <td>${r.id}</td>
+        <td>${r.created_by}</td>
+        <td>${r.status}</td>
+        <td>${actions}</td>
+      </tr>`;
+  });
+}
+
+async function approve(id) {
+  await fetch(API + "/approve/" + id, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token }
+  });
+  refresh();
+}
+
+async function issue(id) {
+  await fetch(API + "/issue/" + id, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + token }
+  });
+  refresh();
+}
+
+function refresh() {
+  loadDashboard();
+  loadRequests();
+}
+
+refresh();
+</script>
+</body>
+</html>
