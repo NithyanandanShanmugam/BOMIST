@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Advanced Dashboard</title>
+<style>
+body { font-family: Arial; margin: 20px; background:#eef2f7; }
+.container { max-width:1200px; margin:auto; }
+.cards { display:flex; gap:15px; }
+.card { flex:1; padding:20px; background:white; border-radius:10px; text-align:center; }
+table { width:100%; margin-top:20px; border-collapse: collapse; }
+th, td { padding:10px; border:1px solid #ccc; text-align:center; }
+button { padding:6px 12px; margin:5px; cursor:pointer; border:none; border-radius:5px; }
+.approve { background:green; color:white; }
+.issue { background:blue; color:white; }
+.export { background:#444; color:white; }
+.import { background:#ff9800; color:white; }
+.addcol { background:#673ab7; color:white; }
+.addrow { background:#009688; color:white; }
+.save { background:#e91e63; color:white; }
+input, select { padding:6px; margin:2px; }
+.error { border:2px solid red; }
+</style>
+</head>
+<body>
+<div class="container">
+<h2>Material Request Dashboard</h2>
+
+<div class="cards">
+<div class="card"><h3>Total</h3><p id="total">0</p></div>
+<div class="card"><h3>Pending</h3><p id="pending">0</p></div>
+<div class="card"><h3>Approved</h3><p id="approved">0</p></div>
+<div class="card"><h3>Issued</h3><p id="issued">0</p></div>
+</div>
+
+<div style="margin-top:15px;">
+  <button class="export" onclick="exportCSV()">Export CSV</button>
+  <input type="file" id="importFile" hidden />
+  <button class="import" onclick="document.getElementById('importFile').click()">Import CSV</button>
+  <button class="addcol" onclick="addColumn()">+ Add Column</button>
+  <button class="addrow" onclick="addRow()">+ Add Row</button>
+  <button class="save" onclick="saveData()">Save</button>
+  <input type="text" id="filterInput" placeholder="Filter by Project / WO" oninput="filterTable()" />
+</div>
+
+<table>
+<thead>
+<tr id="headerRow">
+<th>ID</th>
+<th>Date</th>
+<th>User</th>
+<th>Status</th>
+<th>Project / Work Order</th>
+<th>Part Number</th>
+<th>UOM</th>
+<th>Qty</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="tableBody"></tbody>
+</table>
+</div>
+
+<script>
+const API = "https://your-backend-url.com";
+const token = localStorage.getItem("token");
+
+let currentData = [];
+let customColumns = [];
+
+const statusOptions = ["PENDING", "APPROVED", "ISSUED"];
+const uomOptions = ["Nos", "Kg", "Ltr", "Mtr"];
+
+function getTodayDate() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function renderTable(data) {
+  let tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+
+  data.forEach((r, index) => {
+    let actions = "";
+
+    if (r.status === "PENDING")
+      actions += `<button class='approve' onclick="approve('${r.id}')">Approve</button>`;
+
+    if (r.status === "APPROVED")
+      actions += `<button class='issue' onclick="issue('${r.id}')">Issue</button>`;
+
+    let row = `<tr>
+      <td>${r.id}</td>
+      <td>${r.date || ''}</td>
+      <td contenteditable="true" oninput="updateCell(${index}, 'created_by', this.innerText)">${r.created_by || ''}</td>
+      <td>
+        <select onchange="updateCell(${index}, 'status', this.value)">
+          ${statusOptions.map(s => `<option ${r.status===s?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </td>
+      <td contenteditable="true" oninput="updateCell(${index}, 'project_wo', this.innerText)">${r.project_wo || ''}</td>
+      <td contenteditable="true" oninput="updateCell(${index}, 'part_number', this.innerText)">${r.part_number || ''}</td>
+      <td>
+        <select onchange="updateCell(${index}, 'uom', this.value)">
+          ${uomOptions.map(u => `<option ${r.uom===u?'selected':''}>${u}</option>`).join('')}
+        </select>
+      </td>
+      <td contenteditable="true" oninput="validateQty(this, ${index})">${r.qty || ''}</td>`;
+
+    customColumns.forEach(col => {
+      let val = r[col] || "";
+      row += `<td contenteditable="true" oninput="updateCell(${index}, '${col}', this.innerText)">${val}</td>`;
+    });
+
+    row += `<td>${actions}</td></tr>`;
+
+    tbody.innerHTML += row;
+  });
+}
+
+function updateCell(index, key, value) {
+  currentData[index][key] = value;
+}
+
+function validateQty(cell, index) {
+  let value = cell.innerText;
+  if (isNaN(value) || value === "") {
+    cell.classList.add("error");
+  } else {
+    cell.classList.remove("error");
+    currentData[index].qty = value;
+  }
+}
+
+function addColumn() {
+  let colName = prompt("Enter column name:");
+  if (!colName) return;
+
+  customColumns.push(colName);
+
+  let headerRow = document.getElementById("headerRow");
+  let th = document.createElement("th");
+  th.innerText = colName;
+  headerRow.insertBefore(th, headerRow.lastElementChild);
+
+  currentData.forEach(r => r[colName] = "");
+  renderTable(currentData);
+}
+
+function addRow() {
+  let newRow = {
+    id: Date.now(),
+    date: getTodayDate(),
+    created_by: "",
+    status: "PENDING",
+    project_wo: "",
+    part_number: "",
+    uom: "Nos",
+    qty: ""
+  };
+
+  customColumns.forEach(col => newRow[col] = "");
+
+  currentData.push(newRow);
+  renderTable(currentData);
+}
+
+function filterTable() {
+  let keyword = document.getElementById("filterInput").value.toLowerCase();
+
+  if (!keyword) {
+    renderTable(currentData);
+    return;
+  }
+
+  let filtered = currentData.filter(r =>
+    (r.project_wo || "").toLowerCase().includes(keyword)
+  );
+
+  renderTable(filtered);
+}
+
+function saveData() {
+  // Example: send data to backend
+  fetch(API + "/save", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    },
+    body: JSON.stringify(currentData)
+  })
+  .then(res => res.json())
+  .then(data => alert("Data saved successfully"))
+  .catch(err => alert("Save failed"));
+}
+
+function exportCSV() {
+  let headers = ["id","date","created_by","status","project_wo","part_number","uom","qty", ...customColumns];
+  let csv = headers.join(",") + "\n";
+
+  currentData.forEach(r => {
+    let row = headers.map(h => r[h] || "").join(",");
+    csv += row + "\n";
+  });
+
+  let blob = new Blob([csv], { type: "text/csv" });
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement("a");
+  a.href = url;
+  a.download = "material_requests_extended.csv";
+  a.click();
+}
+</script>
+</body>
+</html>
